@@ -63,12 +63,12 @@ jobs:
         with:
           java-version: ${{ inputs.java-version }}
           distribution: temurin
-        if: ${{ !inputs.use-graalvm }}
 
       - uses: graalvm/setup-graalvm@v1
         with:
-          java-version: ${{ inputs.java-version }}
+          java-version: '23'
           distribution: graalvm-community
+          set-java-home: 'false'
         if: inputs.use-graalvm
 
       - uses: actions/setup-node@v4
