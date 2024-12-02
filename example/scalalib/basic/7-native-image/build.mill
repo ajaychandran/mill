@@ -19,7 +19,7 @@ object foo extends ScalaModule with NativeImageModule {
 
 /** Usage
 
-> ./mill foo.nativeImage -march=compatibility
+> ./mill foo.nativeImage -march=x86-64-v3
 GraalVM Native Image: Generating...App...
 Finished generating...App...
 
