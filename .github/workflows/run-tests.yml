@@ -136,11 +136,11 @@ jobs:
           - java-version: '11'
             use-graalvm: false
             millargs: '"{main,scalalib,bsp}.__.testCached"'
+          # Graal VM native-client requires MSVC build tools to be configured for x86
           - java-version: '11'
-            # native-client requires MSVC build tools to be configured for x86
             use-graalvm: true
             millargs: '"example.scalalib.basic.__.fork.testCached"'
-          - java-version: 17
+          - java-version: '17'
             use-graalvm: false
             millargs: "'integration.{feature,failure}[_].fork.testCached'"
           - java-version: '11'
