@@ -8,7 +8,7 @@ object foo extends ScalaModule with NativeImageModule {
   def zincWorker = ModuleRef(ZincWorkerGraalvm)
 
   object ZincWorkerGraalvm extends ZincWorkerModule {
-    def jvmId = "graalvm-community:21.0.2"
+    def jvmId = "graalvm-community:23.0.1"
   }
 
   def scalaVersion = "2.13.11"
@@ -19,7 +19,7 @@ object foo extends ScalaModule with NativeImageModule {
 
 /** Usage
 
-> ./mill foo.nativeImage -march=x86-64-v3
+> ./mill foo.nativeImage
 GraalVM Native Image: Generating...App...
 Finished generating...App...
 
