@@ -12,6 +12,9 @@ on:
       java-version:
         required: true
         type: string
+      graalvm-home:
+        default: false
+        type: boolean
       os:
         default: 'ubuntu-latest'
         type: string
@@ -60,6 +63,13 @@ jobs:
         with:
           java-version: ${{ inputs.java-version }}
           distribution: temurin
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: 23
+          distribution: graalvm-community
+          set-java-home: false
+        if: ${{ inputs.graalvm-home }}
 
       - uses: actions/setup-node@v4
         with:

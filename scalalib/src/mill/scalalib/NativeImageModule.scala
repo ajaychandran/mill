@@ -71,21 +71,21 @@ trait NativeImageModule extends RunModule with WithZincWorker {
   /**
    * Path to the [[https://www.graalvm.org/latest/reference-manual/native-image/ `native-image` Tool]].
    * Defaults to a path relative to
-   *  - [[ZincWorkerModule.javaHome]], if defined
    *  - environment variable `GRAALVM_HOME`, if defined
+   *  - [[ZincWorkerModule.javaHome]], if defined
    *
    * @note The task fails if the `native-image` Tool is not found.
    */
   def nativeImageTool: T[PathRef] = Task {
-    zincWorker().javaHome().map(_.path)
-      .orElse(sys.env.get("GRAALVM_HOME").map(os.Path(_))) match {
+    sys.env.get("GRAALVM_HOME").map(os.Path(_))
+      .orElse(zincWorker().javaHome().map(_.path)) match {
       case Some(home) =>
         val tool = if (Properties.isWin) "native-image.cmd" else "native-image"
         val path = home / "bin" / tool
         if (os.exists(path)) PathRef(path)
         else throw new RuntimeException(s"$path not found")
       case None =>
-        throw new RuntimeException("ZincWorkerModule.javaHome/GRAALVM_HOME not defined")
+        throw new RuntimeException("GRAALVM_HOME/ZincWorkerModule.javaHome not defined")
     }
   }
 }
