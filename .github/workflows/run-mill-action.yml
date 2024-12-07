@@ -109,4 +109,4 @@ jobs:
           path: .
           name: ${{ inputs.os }}-artifact
           include-hidden-files: true
-        if: ${{ inputs.populate_cache }}
+        if: ${{ inputs.graalvm-home }}
