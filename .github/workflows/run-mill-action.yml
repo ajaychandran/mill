@@ -109,4 +109,11 @@ jobs:
           path: .
           name: ${{ inputs.os }}-artifact
           include-hidden-files: true
-        if: ${{ inputs.graalvm-home }}
+        if: ${{ inputs.populate_cache }}
+
+      - uses: actions/upload-artifact@v4.4.3
+        with:
+          path: ./out
+          name: ${{ inputs.os }}--graalvm-out
+          include-hidden-files: true
+        if: ${{ inputs.graalvm_home }}
