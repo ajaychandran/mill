@@ -5,6 +5,11 @@ import mill.define.ModuleRef
 
 object foo extends ScalaModule with NativeImageModule {
 
+  def nativeRun: T[Int] = Task {
+    val app = nativeImage()()
+    os.proc(app.path.toString).call(stdout = os.Inherit).exitCode
+  }
+
   def zincWorker = ModuleRef(ZincWorkerGraalvm)
 
   object ZincWorkerGraalvm extends ZincWorkerModule {
@@ -23,6 +28,6 @@ object foo extends ScalaModule with NativeImageModule {
 GraalVM Native Image: Generating...App...
 Finished generating...App...
 
-> ./out/foo/nativeImage.dest/App
+> ./mill foo.nativeRun
 Hello, World!
 */
