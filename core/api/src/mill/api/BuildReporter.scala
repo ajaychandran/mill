@@ -1,6 +1,6 @@
 package mill.api
 
-import sbt.testing.Event
+import sbt.testing.{Event, Status}
 
 /**
  * Test reporter class that can be
@@ -22,4 +22,12 @@ trait TestReporter {
 object DummyTestReporter extends TestReporter {
   override def logStart(event: Event): Unit = {}
   override def logFinish(event: Event): Unit = {}
+}
+
+/**
+ * Callback for test progress notifications.
+ */
+trait TestProgressReporter {
+  def logStart(fullyQualifiedName: String): Unit
+  def logFinish(fullyQualifiedName: String, status: Status): Unit
 }

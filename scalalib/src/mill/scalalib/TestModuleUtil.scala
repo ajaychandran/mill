@@ -1,19 +1,18 @@
 package mill.scalalib
 
-import mill.api.{Ctx, PathRef, Result}
-import mill.constants.EnvVars
-import mill.testrunner.{TestArgs, TestResult, TestRunnerUtils}
-import mill.util.Jvm
 import mill.Task
+import mill.api.{Ctx, Logger, PathRef, Result}
+import mill.constants.EnvVars
+import mill.testrunner.*
+import mill.util.Jvm
 import sbt.testing.Status
 
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.{Instant, LocalDateTime, ZoneId}
-import scala.xml.Elem
+import java.util.concurrent.{Executors, TimeUnit}
 import scala.collection.mutable
-import mill.api.Logger
-import java.util.concurrent.Executors
+import scala.xml.Elem
 
 private final class TestModuleUtil(
     useArgsFile: Boolean,
@@ -32,7 +31,8 @@ private final class TestModuleUtil(
     forkWorkingDir: os.Path,
     testReportXml: Option[String],
     javaHome: Option[os.Path],
-    testParallelism: Boolean
+    testParallelism: Boolean,
+    progressDir: os.Path
 )(implicit ctx: mill.api.Ctx) {
 
   private val (jvmArgs, props: Map[String, String]) =
@@ -99,21 +99,38 @@ private final class TestModuleUtil(
       }
     if (selectors.nonEmpty && filteredClassLists.isEmpty) throw doesNotMatchError
 
-    val result = if (testParallelism) {
-      runTestQueueScheduler(filteredClassLists)
-    } else {
-      runTestDefault(filteredClassLists)
-    }
+    val total = filteredClassLists.iterator.map(_.size).sum
+    val progressReporter = PromptProgressReporter(ctx.log, total)
+    os.makeDir.all(progressDir)
+    val syncProgress: Runnable = () =>
+      for {
+        file <- os.list(progressDir)
+        if os.isFile(file)
+        fullyQualifiedName = file.last
+        // skip state management since PromptProgressReporter handles duplicates
+      } os.read(file) match {
+        case "" => progressReporter.logStart(fullyQualifiedName)
+        case name => progressReporter.logFinish(fullyQualifiedName, Status.valueOf(name))
+      }
+    val executor = Executors.newScheduledThreadPool(1)
+    try {
+      executor.scheduleWithFixedDelay(syncProgress, 0, 100, TimeUnit.MILLISECONDS)
 
-    result match {
-      case Result.Failure(errMsg) => Result.Failure(errMsg)
-      case Result.Success((doneMsg, results)) =>
-        if (results.isEmpty && selectors.nonEmpty) throw doesNotMatchError
-        try TestModuleUtil.handleResults(doneMsg, results, Task.ctx(), testReportXml)
-        catch {
-          case e: Throwable => Result.Failure("Test reporting failed: " + e)
-        }
-    }
+      val result = if (testParallelism) {
+        runTestQueueScheduler(filteredClassLists)
+      } else {
+        runTestDefault(filteredClassLists)
+      }
+      result match {
+        case Result.Failure(errMsg) => Result.Failure(errMsg)
+        case Result.Success((doneMsg, results)) =>
+          if (results.isEmpty && selectors.nonEmpty) throw doesNotMatchError
+          try TestModuleUtil.handleResults(doneMsg, results, Task.ctx(), testReportXml)
+          catch {
+            case e: Throwable => Result.Failure("Test reporting failed: " + e)
+          }
+      }
+    } finally executor.shutdown()
   }
 
   private def callTestRunnerSubprocess(
@@ -136,7 +153,8 @@ private final class TestModuleUtil(
       outputPath = outputPath,
       colored = Task.log.prompt.colored,
       testCp = testClasspath.map(_.path),
-      globSelectors = selector
+      globSelectors = selector,
+      progressDir = progressDir
     )
 
     val argsFile = baseFolder / "testargs"
@@ -224,8 +242,6 @@ private final class TestModuleUtil(
       filteredClassLists: Seq[Seq[String]]
   )(implicit ctx: mill.api.Ctx) = {
 
-    val workerStatusMap = new java.util.concurrent.ConcurrentHashMap[os.Path, String => Unit]()
-
     def prepareTestClassesFolder(selectors2: Seq[String], base: os.Path): os.Path = {
       // test-classes folder is used to store the test classes for the children test runners to claim from
       val testClassQueueFolder = base / "test-classes"
@@ -256,17 +272,14 @@ private final class TestModuleUtil(
         }
 
       if (force || startingTestClass.nonEmpty) {
-        startingTestClass.foreach(logger.ticker(_))
         // queue.log file will be appended by the runner with the stolen test class's name
         // it can be used to check the order of test classes of the runner
         val claimLog = claimFolder / os.up / s"${claimFolder.last}.log"
         os.write.over(claimLog, Array.empty[Byte])
-        workerStatusMap.put(claimLog, logger.ticker)
         val result = callTestRunnerSubprocess(
           base,
           Right((startingTestClass, testClassQueueFolder, claimFolder))
         )
-        workerStatusMap.remove(claimLog)
         Some(result)
       } else {
         None
@@ -355,34 +368,20 @@ private final class TestModuleUtil(
       }
     }
 
-    val executor = Executors.newScheduledThreadPool(1)
-    val outputs =
-      try {
-        // Periodically check the queueLog file of every runner, and tick the executing test name
-        executor.scheduleWithFixedDelay(
-          () =>
-            workerStatusMap.forEach { (claimLog, callback) =>
-              // the last one is always the latest
-              os.read.lines(claimLog).lastOption.foreach(callback)
-            },
-          0,
-          20,
-          java.util.concurrent.TimeUnit.MILLISECONDS
-        )
-
-        Task.fork.blocking {
-          // We special-case this to avoid
-          while ({
-            val claimedCounts = subprocessFutures.flatMap(_.value).flatMap(_.toOption).map(_._1)
-            val expectedCounts = filteredClassLists.map(_.size)
-            !(
-              (claimedCounts.sum == expectedCounts.sum && subprocessFutures.head.isCompleted) ||
-                subprocessFutures.forall(_.isCompleted)
-            )
-          }) Thread.sleep(1)
-        }
-        subprocessFutures.flatMap(_.value).map(_.get)
-      } finally executor.shutdown()
+    val outputs = {
+      Task.fork.blocking {
+        // We special-case this to avoid
+        while ({
+          val claimedCounts = subprocessFutures.flatMap(_.value).flatMap(_.toOption).map(_._1)
+          val expectedCounts = filteredClassLists.map(_.size)
+          !(
+            (claimedCounts.sum == expectedCounts.sum && subprocessFutures.head.isCompleted) ||
+              subprocessFutures.forall(_.isCompleted)
+          )
+        }) Thread.sleep(1)
+      }
+      subprocessFutures.flatMap(_.value).map(_.get)
+    }
 
     val subprocessResult = {
       val failMap = mutable.Map.empty[String, String]

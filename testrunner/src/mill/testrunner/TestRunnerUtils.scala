@@ -1,6 +1,6 @@
 package mill.testrunner
 
-import mill.api.{TestReporter, internal}
+import mill.api.{TestReporter, TestProgressReporter, internal}
 import os.Path
 import sbt.testing._
 
@@ -137,16 +137,20 @@ import java.io.PrintStream
       testReporter: TestReporter,
       runner: Runner,
       events: ConcurrentLinkedQueue[Event],
-      systemOut: PrintStream
+      systemOut: PrintStream,
+      progressReporter: TestProgressReporter
   ): Unit = {
     val taskQueue = tasks.to(mutable.Queue)
     while (taskQueue.nonEmpty) {
-      val next = taskQueue.dequeue().execute(
+      val task = taskQueue.dequeue()
+      progressReporter.logStart(task.taskDef().fullyQualifiedName())
+      val next = task.execute(
         new EventHandler {
           def handle(event: Event) = {
             testReporter.logStart(event)
             events.add(event)
             testReporter.logFinish(event)
+            progressReporter.logFinish(event.fullyQualifiedName(), event.status())
           }
         },
         Array(new Logger {
@@ -205,13 +209,14 @@ import java.io.PrintStream
   def runTasks(
       tasks: Seq[Task],
       testReporter: TestReporter,
-      runner: Runner
+      runner: Runner,
+      progressReporter: TestProgressReporter
   ): (String, Iterator[TestResult]) = {
     // Capture this value outside of the task event handler so it
     // isn't affected by a test framework's stream redirects
     val systemOut = System.out
     val events = new ConcurrentLinkedQueue[Event]()
-    executeTasks(tasks, testReporter, runner, events, systemOut)
+    executeTasks(tasks, testReporter, runner, events, systemOut, progressReporter)
     handleRunnerDone(runner, events)
   }
 
@@ -221,14 +226,15 @@ import java.io.PrintStream
       args: Seq[String],
       classFilter: Class[?] => Boolean,
       cl: ClassLoader,
-      testReporter: TestReporter
+      testReporter: TestReporter,
+      progressReporter: TestProgressReporter
   ): (String, Seq[TestResult]) = {
 
     val framework = frameworkInstances(cl)
 
     val (runner, tasks) = getTestTasks(framework, args, classFilter, cl, testClassfilePath)
 
-    val (doneMessage, results) = runTasks(tasks.toSeq, testReporter, runner)
+    val (doneMessage, results) = runTasks(tasks.toSeq, testReporter, runner, progressReporter)
 
     (doneMessage, results.toSeq)
   }
@@ -239,7 +245,8 @@ import java.io.PrintStream
       testReporter: TestReporter,
       runner: Runner,
       claimFolder: os.Path,
-      testClassQueueFolder: os.Path
+      testClassQueueFolder: os.Path,
+      progressReporter: TestProgressReporter
   ): (String, Iterator[TestResult]) = {
     // Capture this value outside of the task event handler so it
     // isn't affected by a test framework's stream redirects
@@ -262,7 +269,7 @@ import java.io.PrintStream
         }
 
       val tasks = runner.tasks(taskDefs.toArray)
-      executeTasks(tasks, testReporter, runner, events, systemOut)
+      executeTasks(tasks, testReporter, runner, events, systemOut, progressReporter)
     }
 
     startingTestClass.foreach(runClaimedTestClass)
@@ -292,7 +299,8 @@ import java.io.PrintStream
       testClassQueueFolder: os.Path,
       claimFolder: os.Path,
       cl: ClassLoader,
-      testReporter: TestReporter
+      testReporter: TestReporter,
+      progressReporter: TestProgressReporter
   ): (String, Seq[TestResult]) = {
 
     val framework = frameworkInstances(cl)
@@ -307,7 +315,8 @@ import java.io.PrintStream
       testReporter,
       runner,
       claimFolder,
-      testClassQueueFolder
+      testClassQueueFolder,
+      progressReporter
     )
 
     (doneMessage, results.toSeq)

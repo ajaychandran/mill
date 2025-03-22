@@ -1,12 +1,14 @@
 package mill.testrunner
 
-import mill.api.{DummyTestReporter, internal}
+import mill.api.{DummyTestReporter, TestProgressReporter, internal}
+import sbt.testing.Status
 
 @internal object TestRunnerMain0 {
   def main0(args: Array[String], classLoader: ClassLoader): Unit = {
     try {
       val testArgs = upickle.default.read[mill.testrunner.TestArgs](os.read(os.Path(args(1))))
       testArgs.sysProps.foreach { case (k, v) => System.setProperty(k, v) }
+      val progressReporter = new ProgressReporter(testArgs.progressDir)
 
       val result = testArgs.globSelectors match {
         case Left(selectors) =>
@@ -17,7 +19,8 @@ import mill.api.{DummyTestReporter, internal}
             args = testArgs.arguments,
             classFilter = cls => filter(cls.getName),
             cl = classLoader,
-            testReporter = DummyTestReporter
+            testReporter = DummyTestReporter,
+            progressReporter = progressReporter
           )
         case Right((startingTestClass, testClassQueueFolder, claimFolder)) =>
           TestRunnerUtils.queueTestFramework0(
@@ -28,7 +31,8 @@ import mill.api.{DummyTestReporter, internal}
             testClassQueueFolder = testClassQueueFolder,
             claimFolder = claimFolder,
             cl = classLoader,
-            testReporter = DummyTestReporter
+            testReporter = DummyTestReporter,
+            progressReporter = progressReporter
           )
       }
 
@@ -48,4 +52,15 @@ import mill.api.{DummyTestReporter, internal}
     System.exit(0)
   }
 
+  /**
+   * Logs test progress notifications in files under `progressDir`.
+   */
+  class ProgressReporter(progressDir: os.Path) extends TestProgressReporter {
+    def logStart(fullyQualifiedName: String): Unit = {
+      os.write(progressDir / fullyQualifiedName, Array.emptyByteArray)
+    }
+    def logFinish(fullyQualifiedName: String, status: Status): Unit = {
+      os.write.over(progressDir / fullyQualifiedName, status.name())
+    }
+  }
 }

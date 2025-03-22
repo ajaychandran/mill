@@ -166,7 +166,8 @@ trait TestModule
         outputPath = outputPath,
         colored = Task.log.prompt.colored,
         testCp = testClasspath().map(_.path),
-        globSelectors = Left(selectors)
+        globSelectors = Left(selectors),
+        progressDir = Task.dest / "progress"
       )
 
       val argsFile = Task.dest / "testargs"
@@ -216,7 +217,8 @@ trait TestModule
         forkWorkingDir(),
         testReportXml(),
         zincWorker().javaHome().map(_.path),
-        testParallelism()
+        testParallelism(),
+        Task.dest / "progress"
       )
       testModuleUtil.runTests()
     }

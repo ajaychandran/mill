@@ -13,6 +13,7 @@ import mill.util.Jvm
       testReporter: TestReporter,
       classFilter: Class[?] => Boolean = _ => true
   )(implicit ctx: Ctx.Log): (String, Seq[mill.testrunner.TestResult]) = {
+    val progressReporter = new PromptProgressReporter(ctx.log, 0)
     Jvm.withClassLoader(
       classPath = entireClasspath.toVector,
       sharedPrefixes = Seq("sbt.testing.")
@@ -23,7 +24,8 @@ import mill.util.Jvm
         args,
         classFilter,
         classLoader,
-        testReporter
+        testReporter,
+        progressReporter
       )
     }
   }
