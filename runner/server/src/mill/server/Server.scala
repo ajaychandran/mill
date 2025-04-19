@@ -1,19 +1,14 @@
 package mill.server
 
 import mill.api.SystemStreams
-import mill.constants.ProxyStream.Output
-import mill.client.lock.{Lock, Locks}
 import mill.client.*
-import mill.constants.ServerFiles
-import mill.constants.InputPumper
-import mill.constants.ProxyStream
+import mill.client.lock.{Lock, Locks}
+import mill.constants.ProxyStream.Output
+import mill.constants.{InputPumper, OutFiles, ProxyStream, ServerFiles}
 
 import java.io.*
 import java.net.{InetAddress, Socket}
-import scala.jdk.CollectionConverters.*
-import scala.util.Try
-import scala.util.Using
-import mill.constants.OutFiles
+import scala.util.{Try, Using}
 
 /**
  * Models a long-lived server that receives requests from a client and calls a [[main0]]
@@ -163,7 +158,7 @@ abstract class Server[T](
       val args = ClientUtil.parseArgs(argStream)
       val env = ClientUtil.parseMap(argStream)
       serverLog("args " + upickle.default.write(args))
-      serverLog("env " + upickle.default.write(env.asScala))
+      serverLog("env " + upickle.default.write(env))
       val userSpecifiedProperties = ClientUtil.parseMap(argStream)
       argStream.close()
 
@@ -177,9 +172,9 @@ abstract class Server[T](
               stateCache,
               interactive,
               new SystemStreams(stdout, stderr, proxiedSocketInput),
-              env.asScala.toMap,
+              env,
               idle = _,
-              userSpecifiedProperties.asScala.toMap,
+              userSpecifiedProperties,
               initialSystemProperties,
               systemExit = exitCode => {
                 os.write.over(serverDir / ServerFiles.exitCode, exitCode.toString)
@@ -285,7 +280,7 @@ object Server {
     lock.tryLock() match {
       case null => None
       case l =>
-        if (l.isLocked) {
+        if (l.isLocked()) {
           try Some(t)
           finally l.release()
         } else {

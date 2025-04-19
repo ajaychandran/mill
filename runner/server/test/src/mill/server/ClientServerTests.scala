@@ -8,7 +8,6 @@ import utest.*
 
 import java.io.*
 import java.nio.file.Path
-import scala.jdk.CollectionConverters.*
 
 /**
  * Exercises the client-server logic in memory, using in-memory locks
@@ -90,7 +89,7 @@ object ClientServerTests extends TestSuite {
         in,
         new PrintStream(out),
         new PrintStream(err),
-        env.asJava,
+        env,
         args,
         memoryLocks,
         forceFailureForTestingMillisDelay
