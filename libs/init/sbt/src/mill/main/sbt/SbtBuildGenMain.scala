@@ -79,7 +79,8 @@ object SbtBuildGenMain {
     }
     var exportedBuild = os.list.stream(exportDir)
       .map(path => upickle.default.read[SbtModuleSpec](path.toNIO)).toSeq
-    exportedBuild = normalizeSbtBuild(exportedBuild)
+    exportedBuild = normalizeModuleDeps(exportedBuild)
+    exportedBuild = normalizeMvnDeps(exportedBuild)
     val packages = exportedBuild.groupMap(_.sharedBaseDir)(_.module).map {
       case (Left(dir), Seq(module)) => PackageSpec(dir, module)
       case (Left(dir), crossVersionSpecs) => PackageSpec(dir, toCrossModule(crossVersionSpecs))
@@ -115,7 +116,34 @@ object SbtBuildGenMain {
     BuildGen.writeBuildFiles(packages1, millJvmId, merge.value, depNames, baseModule, millJvmOpts)
   }
 
-  private def normalizeSbtBuild(sbtModules: Seq[SbtModuleSpec]) = {
+  private def normalizeModuleDeps(sbtModules: Seq[SbtModuleSpec]) = {
+    val moduleSegments = sbtModules.toSet.flatMap { spec =>
+      import spec.*
+      val segments: Seq[String] = sharedBaseDir.fold(_.segments, _.segments :+ module.name)
+      Set(segments) ++ module.test.map(test => segments :+ test.name)
+    }
+    def exists(dep: ModuleDep) = moduleSegments.contains(dep.segments ++ dep.childSegment)
+    def updateDeps(values: Values[ModuleDep]) = {
+      import values.*
+      values.copy(
+        base.filter(exists),
+        cross.map((k, v) => (k, v.filter(exists))).filter(_._2.nonEmpty)
+      )
+    }
+    def updateModule(module: ModuleSpec) =
+      import module.*
+      module.copy(
+        moduleDeps = updateDeps(moduleDeps),
+        compileModuleDeps = updateDeps(compileModuleDeps),
+        runModuleDeps = updateDeps(runModuleDeps)
+      )
+    sbtModules.map(spec =>
+      spec.copy(module = updateModule(spec.module)
+        .copy(test = spec.module.test.map(updateModule)))
+    )
+  }
+
+  private def normalizeMvnDeps(sbtModules: Seq[SbtModuleSpec]) = {
     val platformedDeps = sbtModules.iterator.flatMap(spec => spec.module +: spec.module.test.toSeq)
       .flatMap { module =>
         import module.*
@@ -146,7 +174,7 @@ object SbtBuildGenMain {
       )
     }
     def updateModule(module: ModuleSpec): ModuleSpec = {
-      if (module.supertypes.forall(s => s == "ScalaJSModule" || s == "ScalaNativeModule"))
+      if (module.supertypes.exists(s => s == "ScalaJSModule" || s == "ScalaNativeModule"))
         module
       else updateModule0(module).copy(test = module.test.map(updateModule0))
     }
