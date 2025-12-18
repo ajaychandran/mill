@@ -102,7 +102,7 @@ object `package` extends MillPublishScalaModule {
         )
         PathRef(file)
       }
-      def millExecutable: T[PathRef] = build.dist.executableRaw()
+      def millExecutable: T[PathRef] = build.dist.executable()
       def mocks: Map[String, Mock]
       def runMock(mock: Mock) = Task.Command(persistent = true) {
         import mock.*
