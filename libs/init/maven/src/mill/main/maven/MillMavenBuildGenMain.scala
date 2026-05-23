@@ -50,7 +50,7 @@ object MillMavenBuildGenMain {
       val model = result.getEffectiveModel
       val rawModel = result.getRawModel
       val moduleDir = os.Path(model.getProjectDirectory)
-      val plugins = Plugins(model, mvnWorkspace)
+      val plugins = Plugins(model)
       var mainModule = ModuleSpec(
         name = moduleDir.last,
         repositories = model.getRepositories.asScala.collect {

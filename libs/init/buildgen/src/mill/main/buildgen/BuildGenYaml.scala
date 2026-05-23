@@ -106,8 +106,6 @@ object BuildGenYaml {
       lines += "resources: []"
     } else {
       renderYamlStringListValuesPlain("sourcesFolders", sourcesFolders).foreach(lines += _)
-      renderYamlSourcesList("sources", sources).foreach(lines += _)
-      renderYamlSourcesList("resources", resources).foreach(lines += _)
     }
 
     // Fork config
@@ -120,11 +118,9 @@ object BuildGenYaml {
     // Checkstyle
     renderYamlStringMapValues("checkstyleProperties", checkstyleProperties).foreach(lines += _)
     renderYamlMvnDepsList("checkstyleMvnDeps", checkstyleMvnDeps).foreach(lines += _)
-    renderYamlRelPathValue("checkstyleConfig", checkstyleConfig).foreach(lines += _)
     renderYamlStringValue("checkstyleVersion", checkstyleVersion).foreach(lines += _)
 
     // PMD
-    renderYamlSourcesList("pmdRulesets", pmdRulesets).foreach(lines += _)
     renderYamlStringValue("pmdVersion", pmdVersion).foreach(lines += _)
 
     // Publishing
@@ -249,10 +245,10 @@ object BuildGenYaml {
     }
   }
 
-  private def renderYamlSourcesList(name: String, values: Values[os.RelPath]): Seq[String] = {
+  private def renderYamlSourcesList(name: String, values: Values[String]): Seq[String] = {
     if (values.base.isEmpty) Nil
     else {
-      val paths = values.base.map(_.toString)
+      val paths = values.base
       Seq(s"$name: ${renderYamlStringList(paths)}")
     }
   }

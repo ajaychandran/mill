@@ -43,12 +43,18 @@ trait PmdModule extends CoursierModule, OfflineSupportModule {
         "-d",
         if (leftover.value.nonEmpty) leftover.value.mkString(",")
         else "",
-        "-R",
-        pmdRulesets().map(_.path.toString).mkString(","),
         "-f",
         format,
         "-r",
         output.toString
+      ) ++ (
+        if (pmdOptions().contains("-R") || pmdRulesets().isEmpty) Nil
+        else Seq(
+          "-R",
+          pmdRulesets()
+            .collect { case ref if os.exists(ref.path) => ref.path.toString }
+            .mkString(",")
+        )
       )
 
       val args =

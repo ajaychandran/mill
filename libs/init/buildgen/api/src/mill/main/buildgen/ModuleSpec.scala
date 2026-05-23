@@ -6,70 +6,68 @@ import upickle.default.{ReadWriter, macroRW, readwriter}
 import scala.language.implicitConversions
 
 case class ModuleSpec(
-    name: String,
-    imports: Seq[String] = Nil,
-    supertypes: Seq[String] = Nil,
-    crossKeys: Seq[String] = Nil,
-    alias: Option[String] = None,
-    moduleDir: Value[String] = Value(),
-    repositories: Values[String] = Nil,
-    forkArgs: Values[Opt] = Values(),
-    forkWorkingDir: Value[String] = Value(),
-    mandatoryMvnDeps: Values[MvnDep] = Values(),
-    mvnDeps: Values[MvnDep] = Values(),
-    compileMvnDeps: Values[MvnDep] = Values(),
-    runMvnDeps: Values[MvnDep] = Values(),
-    bomMvnDeps: Values[MvnDep] = Values(),
-    depManagement: Values[MvnDep] = Values(),
-    annotationProcessorsMvnDeps: Values[MvnDep] = Values(),
-    javacOptions: Values[Opt] = Values(),
-    moduleDeps: Values[ModuleDep] = Values(),
-    compileModuleDeps: Values[ModuleDep] = Values(),
-    runModuleDeps: Values[ModuleDep] = Values(),
-    bomModuleDeps: Values[ModuleDep] = Values(),
-    sourcesFolders: Values[String] = Values(),
-    sources: Values[os.RelPath] = Values(),
-    resources: Values[os.RelPath] = Values(),
-    artifactName: Value[String] = Value(),
-    pomPackagingType: Value[String] = Value(),
-    pomParentProject: Value[Artifact] = Value(),
-    pomSettings: Value[PomSettings] = Value(),
-    publishVersion: Value[String] = Value(),
-    versionScheme: Value[String] = Value(),
-    publishProperties: Values[(String, String)] = Values(),
-    errorProneDeps: Values[MvnDep] = Values(),
-    errorProneOptions: Values[Opt] = Values(),
-    jmhCoreVersion: Value[String] = Value(),
-    checkstyleProperties: Values[(String, String)] = Values(),
-    checkstyleMvnDeps: Values[MvnDep] = Values(),
-    checkstyleConfig: Value[os.RelPath] = Value(),
-    checkstyleVersion: Value[String] = Value(),
-    pmdRulesets: Values[os.RelPath] = Values(),
-    pmdVersion: Value[String] = Value(),
-    scalaVersion: Value[String] = Value(),
-    scalacOptions: Values[Opt] = Values(),
-    scalacPluginMvnDeps: Values[MvnDep] = Values(),
-    scalaJSVersion: Value[String] = Value(),
-    moduleKind: Value[String] = Value(),
-    scalaNativeVersion: Value[String] = Value(),
-    sourcesRootFolders: Values[String] = Values(),
-    testParallelism: Value[Boolean] = Value(),
-    testSandboxWorkingDir: Value[Boolean] = Value(),
-    testFramework: Value[String] = Value(),
-    scalafixConfig: Value[String] = Value(),
-    scalafixIvyDeps: Values[MvnDep] = Values(),
-    scoverageVersion: Value[String] = Value(),
-    branchCoverageMin: Value[Double] = Value(),
-    statementCoverageMin: Value[Double] = Value(),
-    mimaPreviousVersions: Values[String] = Values(),
-    mimaPreviousArtifacts: Values[MvnDep] = Values(),
-    mimaCheckDirection: Value[String] = Value(),
-    mimaBinaryIssueFilters: Values[String] = Values(),
-    mimaBackwardIssueFilters: Values[(String, Seq[String])] = Values(),
-    mimaForwardIssueFilters: Values[(String, Seq[String])] = Values(),
-    mimaExcludeAnnotations: Values[String] = Values(),
-    mimaReportSignatureProblems: Value[Boolean] = Value(),
-    children: Seq[ModuleSpec] = Nil
+                       name: String,
+                       imports: Seq[String] = Nil,
+                       supertypes: Seq[String] = Nil,
+                       crossKeys: Seq[String] = Nil,
+                       alias: Option[String] = None,
+                       moduleDir: Value[String] = Value(),
+                       repositories: Values[String] = Nil,
+                       forkArgs: Values[Opt] = Values(),
+                       forkWorkingDir: Value[String] = Value(),
+                       mandatoryMvnDeps: Values[MvnDep] = Values(),
+                       mvnDeps: Values[MvnDep] = Values(),
+                       compileMvnDeps: Values[MvnDep] = Values(),
+                       runMvnDeps: Values[MvnDep] = Values(),
+                       bomMvnDeps: Values[MvnDep] = Values(),
+                       depManagement: Values[MvnDep] = Values(),
+                       annotationProcessorsMvnDeps: Values[MvnDep] = Values(),
+                       javacOptions: Values[Opt] = Values(),
+                       moduleDeps: Values[ModuleDep] = Values(),
+                       compileModuleDeps: Values[ModuleDep] = Values(),
+                       runModuleDeps: Values[ModuleDep] = Values(),
+                       bomModuleDeps: Values[ModuleDep] = Values(),
+                       sourcesFolders: Values[String] = Values(),
+                       artifactName: Value[String] = Value(),
+                       pomPackagingType: Value[String] = Value(),
+                       pomParentProject: Value[Artifact] = Value(),
+                       pomSettings: Value[PomSettings] = Value(),
+                       publishVersion: Value[String] = Value(),
+                       versionScheme: Value[String] = Value(),
+                       publishProperties: Values[(String, String)] = Values(),
+                       errorProneDeps: Values[MvnDep] = Values(),
+                       errorProneOptions: Values[Opt] = Values(),
+                       jmhCoreVersion: Value[String] = Value(),
+                       checkstyleProperties: Values[(String, String)] = Values(),
+                       checkstyleMvnDeps: Values[MvnDep] = Values(),
+                       checkstyleOptions: Values[String] = Values(),
+                       checkstyleVersion: Value[String] = Value(),
+                       pmdOptions: Values[String] = Values(),
+                       pmdVersion: Value[String] = Value(),
+                       scalaVersion: Value[String] = Value(),
+                       scalacOptions: Values[Opt] = Values(),
+                       scalacPluginMvnDeps: Values[MvnDep] = Values(),
+                       scalaJSVersion: Value[String] = Value(),
+                       moduleKind: Value[String] = Value(),
+                       scalaNativeVersion: Value[String] = Value(),
+                       sourcesRootFolders: Values[String] = Values(),
+                       testParallelism: Value[Boolean] = Value(),
+                       testSandboxWorkingDir: Value[Boolean] = Value(),
+                       testFramework: Value[String] = Value(),
+                       scalafixConfig: Value[String] = Value(),
+                       scalafixIvyDeps: Values[MvnDep] = Values(),
+                       scoverageVersion: Value[String] = Value(),
+                       branchCoverageMin: Value[Double] = Value(),
+                       statementCoverageMin: Value[Double] = Value(),
+                       mimaPreviousVersions: Values[String] = Values(),
+                       mimaPreviousArtifacts: Values[MvnDep] = Values(),
+                       mimaCheckDirection: Value[String] = Value(),
+                       mimaBinaryIssueFilters: Values[String] = Values(),
+                       mimaBackwardIssueFilters: Values[(String, Seq[String])] = Values(),
+                       mimaForwardIssueFilters: Values[(String, Seq[String])] = Values(),
+                       mimaExcludeAnnotations: Values[String] = Values(),
+                       mimaReportSignatureProblems: Value[Boolean] = Value(),
+                       children: Seq[ModuleSpec] = Nil
 ) {
 
   def isBomModule: Boolean = supertypes.contains("BomModule")
@@ -104,26 +102,26 @@ case class ModuleSpec(
   )
 
   def withCheckstyleModule(
-      checkstyleProperties: Values[(String, String)] = Values(),
-      checkstyleMvnDeps: Values[MvnDep] = Values(),
-      checkstyleConfig: Value[os.RelPath] = Value(),
-      checkstyleVersion: Value[String] = Value()
+                            checkstyleProperties: Values[(String, String)] = Values(),
+                            checkstyleMvnDeps: Values[MvnDep] = Values(),
+                            checkstyleConfig: Option[String] = None,
+                            checkstyleVersion: Value[String] = Value()
   ): ModuleSpec = copy(
-    imports = "mill.javalib.checkstyle.CheckstyleModule" +: imports,
+    imports = "mill.javalib.checkstyle.CheckstyleModule" +: "mill.api.BuildCtx" +: imports,
     supertypes = supertypes :+ "CheckstyleModule",
     checkstyleProperties = checkstyleProperties,
     checkstyleMvnDeps = checkstyleMvnDeps,
-    checkstyleConfig = checkstyleConfig,
+    checkstyleOptions = checkstyleConfig.toSeq.flatMap(c => Seq("-c", c)),
     checkstyleVersion = checkstyleVersion
   )
 
   def withPmdModule(
-      pmdRulesets: Values[os.RelPath] = Values(),
-      pmdVersion: Value[String] = Value()
+                     pmdRulesets: Seq[String] = Nil,
+                     pmdVersion: String = ""
   ): ModuleSpec = copy(
-    imports = "mill.javalib.pmd.PmdModule" +: imports,
+    imports = "mill.javalib.pmd.PmdModule" +: "mill.api.BuildCtx" +: imports,
     supertypes = supertypes :+ "PmdModule",
-    pmdRulesets = pmdRulesets,
+    pmdOptions = if (pmdRulesets.isEmpty) Nil else Seq("-R", pmdRulesets.mkString(",")),
     pmdVersion = pmdVersion
   )
 
@@ -285,8 +283,6 @@ object ModuleSpec {
   object PomSettings {
     implicit val rw: ReadWriter[PomSettings] = macroRW
   }
-  implicit val rwRelPath: ReadWriter[os.RelPath] =
-    readwriter[String].bimap(_.toString, os.RelPath(_))
 
   case class Value[+A](base: Option[A] = None, cross: Seq[(String, A)] = Nil)
   object Value {

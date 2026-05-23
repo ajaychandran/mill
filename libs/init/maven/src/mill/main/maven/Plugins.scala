@@ -6,12 +6,9 @@ import mill.main.maven.MavenUtil.*
 import org.apache.maven.model.{ConfigurationContainer, Model}
 import org.codehaus.plexus.util.xml.Xpp3Dom
 
-import java.net.URL
-import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
-import scala.util.Try
 
-class Plugins(model: Model, mvnWorkspace: os.Path) {
+class Plugins(model: Model) {
 
   def javacOptions: Seq[Opt] = plugin("maven-compiler-plugin").flatMap(config).fold(Nil) { dom =>
     def opt(name: String, prefix: String = "-") = value(dom, name).map(Opt(prefix + name, _))
@@ -28,7 +25,7 @@ class Plugins(model: Model, mvnWorkspace: os.Path) {
     ))
     .flatMap(child(_, "annotationProcessorPaths"))
     .fold(Nil)(children(_, "path"))
-    .flatMap(dom =>
+    .flatMap { dom =>
       for {
         organization <- value(dom, "groupId")
         name <- value(dom, "artifactId")
@@ -49,7 +46,7 @@ class Plugins(model: Model, mvnWorkspace: os.Path) {
         `type` = typ,
         excludes = excludes
       )
-    )
+    }
 
   def skipDeploy: Boolean = plugin("maven-deploy-plugin").flatMap(config)
     .flatMap(value(_, "skip")).fold(false)(_.toBoolean)
@@ -63,20 +60,6 @@ class Plugins(model: Model, mvnWorkspace: os.Path) {
       }
     }
 
-  // Input could be a filesystem path, a URL, or a classpath resource
-  private def toSourceOption(v: String) = {
-    val moduleDir = os.Path(model.getProjectDirectory)
-    val relPath: PartialFunction[os.Path, os.RelPath] = {
-      case path if os.exists(path) => path.relativeTo(moduleDir)
-    }
-    Try(os.RelPath(v)).toOption.collect {
-      case rel if os.exists(moduleDir / rel) => rel
-      case rel if os.exists(mvnWorkspace / rel) => (mvnWorkspace / rel).relativeTo(moduleDir)
-    }
-      .orElse(Try(os.Path(v)).toOption.collect(relPath))
-      .orElse(Try(os.Path(Paths.get(URL(v).toURI))).toOption.collect(relPath))
-  }
-
   /**
    * @see [[https://maven.apache.org/plugins/maven-checkstyle-plugin/checkstyle-mojo.html]]
    */
@@ -84,13 +67,17 @@ class Plugins(model: Model, mvnWorkspace: os.Path) {
     plugin0 <- plugin("maven-checkstyle-plugin")
     checkstyleMvnDeps = plugin0.getDependencies.asScala.toSeq.map(toMvnDep)
     dom <- plugin0.getExecutions.asScala.headOption.flatMap(config)
-    propertyExpansion = value(dom, "propertyExpansion")
-    checkstyleProperties = propertyExpansion.toSeq.flatMap { v =>
+    checkstyleProperties = value(dom, "propertyExpansion").toSeq.flatMap { v =>
       v.split("\\s+").toSeq.collect {
         case s"$k=$v" => (k, v)
       }
     }
-    checkstyleConfig = value(dom, "configLocation").flatMap(toSourceOption)
+    // Config file can be a preset, classpath resource, URL or file.
+    checkstyleConfig = value(dom, "configLocation").map {
+      case "sun_checks" => "https://raw.githubusercontent.com/checkstyle/checkstyle/refs/heads/master/src/main/resources/sun_checks.xml"
+      case "google_checks" => "https://raw.githubusercontent.com/checkstyle/checkstyle/refs/heads/master/src/main/resources/google_checks.xml"
+      case str => str
+    }
   } yield module.withCheckstyleModule(
     checkstyleProperties = Values(checkstyleProperties, appendSuper = true),
     checkstyleMvnDeps = checkstyleMvnDeps,
@@ -103,8 +90,13 @@ class Plugins(model: Model, mvnWorkspace: os.Path) {
   def withPmdModule(module: ModuleSpec): Option[ModuleSpec] = for {
     plugin0 <- plugin("maven-pmd-plugin")
     dom <- config(plugin0)
-    pmdRulesets = child(dom, "rulesets").toSeq.flatMap(values(_, "ruleset")).flatMap(toSourceOption)
-    pmdVersion = plugin0.getDependencies.asScala.collectFirst {
+    // Ruleset can be a preset, classpath resource, URL or file.
+    pmdRulesets = child(dom, "rulesets").toSeq.flatMap(values(_, "ruleset")).map {
+      case "/rulesets/java/maven-pmd-plugin-default.xml" =>
+            "https://github.com/apache/maven-pmd-plugin/raw/refs/heads/master/src/main/resources/rulesets/java/maven-pmd-plugin-default.xml"
+      case str => str
+    }
+    pmdVersion <- plugin0.getDependencies.asScala.collectFirst {
       case dep if dep.getGroupId == "net.sourceforge.pmd" => dep.getVersion
     }
   } yield module.withPmdModule(pmdRulesets = pmdRulesets, pmdVersion = pmdVersion)

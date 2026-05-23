@@ -93,6 +93,20 @@ object CheckstyleModuleTest extends TestSuite {
           testJava(resources / "compatible-java", "sarif", "8.42")
         )
       }
+
+      test("checkstyleProperties") {
+
+        assert(
+          testJava(
+            resources / "non-compatible",
+            "plain",
+            violations = Seq.fill(7)("Array should contain trailing comma") ++
+              Seq.fill(2)("Empty statement"),
+            properties = Map("checkstyle.ArrayTrailingComma.alwaysDemandTrailingComma" -> "true"),
+            propertiesFile =  os.sub / "nonexistent.properties"
+          )
+        )
+      }
     }
 
     test("limitations") {
@@ -127,6 +141,8 @@ object CheckstyleModuleTest extends TestSuite {
       format: String = "xml",
       version: String = "10.18.1",
       options: Seq[String] = Nil,
+      properties: Map[String, String] = Map.empty,
+      propertiesFile: os.SubPath = os.sub / "checkstyle.properties",
       violations: Seq[String] = Seq.empty,
       check: Boolean = false,
       stdout: Boolean = false,
@@ -137,6 +153,8 @@ object CheckstyleModuleTest extends TestSuite {
       override def checkstyleFormat: T[String] = format
       override def checkstyleOptions: T[Seq[String]] = options
       override def checkstyleVersion: T[String] = version
+      override def checkstyleProperties = properties
+      override def checkstylePropertiesFile = Task.Source(propertiesFile)
       lazy val millDiscover = Discover[this.type]
     }
 

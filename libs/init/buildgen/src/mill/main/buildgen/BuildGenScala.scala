@@ -171,8 +171,6 @@ object BuildGenScala {
       lines += "def resources = Nil"
     } else {
       lines += renderDefValues("sourcesFolders", sourcesFolders, encodeString, isTask = false)
-      lines += renderDefSources("sources", sources)
-      lines += renderDefSources("resources", resources)
     }
     lines += renderDefValues("forkArgs", forkArgs, encodeOpt)
     lines += renderDefValue("forkWorkingDir", forkWorkingDir, identity[String])
@@ -186,11 +184,9 @@ object BuildGenScala {
       collection = "Map"
     )
     lines += renderDefValues("checkstyleMvnDeps", checkstyleMvnDeps, encodeMvnDep)
-    lines += renderDefValue("checkstyleConfig", checkstyleConfig, encodeSource)
     lines += renderDefValue("checkstyleVersion", checkstyleVersion, encodeString)
-    lines += renderDefSources("pmdRulesets", pmdRulesets)
     lines += renderDefValue("pmdVersion", pmdVersion, encodeString)
-    lines += renderDefValue("scalafixConfig", scalafixConfig, encodeSome)
+    lines += renderDefSource("scalafixConfig", scalafixConfig)
     lines += renderDefValues("scalafixIvyDeps", scalafixIvyDeps, encodeMvnDep)
     lines += renderDefValue("scoverageVersion", scoverageVersion, encodeString)
     lines += renderDefValue("branchCoverageMin", branchCoverageMin, encodeSome)
@@ -307,9 +303,15 @@ object BuildGenScala {
       }
     }
   }
-  private def renderDefSources(member: String, values: Values[os.RelPath]) = {
-    def encode(rels: Seq[os.RelPath]) = rels.map(encodeRelPath).mkString("Task.Sources(", ", ", ")")
-    def encodeSeq(rels: Seq[os.RelPath]) = rels.map(encodeRelPath).mkString("Seq(", ", ", ")")
+  private def renderDefSource(member: String, value: Value[String]) = {
+    import value.*
+    if (cross.isEmpty) base.fold("")(str => s"Task.Source($str)")
+    else renderCrossMatch(s"def $member = Task.Source(", cross, base, identity[String], ")")
+  }
+
+  private def renderDefSources(member: String, values: Values[String]) = {
+    def encode(seq: Seq[String]) = seq.map(encodeString).mkString("Task.Sources(", ", ", ")")
+    def encodeSeq(seq: Seq[String]) = seq.map(encodeString).mkString("Seq(", ", ", ")")
     import values.*
     if (base.isEmpty && cross.isEmpty) ""
     else if (cross.isEmpty && !appendSuper) {
@@ -384,7 +386,7 @@ object BuildGenScala {
       s"os.rel$ups$segments"
     }
   }
-  private def encodeSource(a: os.RelPath) = s"""Task.Source(${encodeRelPath(a)})"""
+
   private def encodeArtifact(a: Artifact) = {
     import a.*
     s"""Artifact("$group", "$id", "$version")"""

@@ -94,18 +94,21 @@ class BuildModelBuilder(ctx: GradleBuildCtx, objectFactory: ObjectFactory, works
         bomModuleDeps = mainBomDeps.collect(toModuleDep)
       ).withErrorProneModule(mvnDeps("errorprone"))
       for (ext <- Option(getExtensions.findByType(classOf[CheckstyleExtension]))) {
-        val configFile = os.Path(ext.getConfigFile)
-        val properties = Seq(("config_loc", (configFile / os.up).toString))
+        // https://docs.gradle.org/current/userguide/checkstyle_plugin.html#sec:checkstyle_built_in_variables
+        val properties = Option(ext.getConfigDirectory.getOrNull())
+          .map(_.getAsFile)
+          .filter(_.exists())
+          .fold(Nil)(dir => Seq(("config_loc", dir.toString)))
         mainModule = mainModule.withCheckstyleModule(
           checkstyleProperties = Values(properties, appendSuper = true),
           checkstyleMvnDeps = Values(mvnDeps("checkstyle"), appendSuper = true),
-          checkstyleConfig = configFile.relativeTo(moduleDir),
+          checkstyleConfig = Option(ext.getConfigFile).collect { case file if file.exists() => file.toString },
           checkstyleVersion = ext.getToolVersion
         )
       }
       for (ext <- Option(getExtensions.findByType(classOf[PmdExtension]))) {
         mainModule = mainModule.withPmdModule(
-          pmdRulesets = ext.getRuleSetFiles.asScala.toSeq.map(os.Path(_).relativeTo(moduleDir)),
+          pmdRulesets = ext.getRuleSetFiles.asScala.toSeq.map(_.toString),
           pmdVersion = ext.getToolVersion
         )
       }

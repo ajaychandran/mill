@@ -5,7 +5,10 @@
 
   <module name="TreeWalker">
 
-    <module name="ArrayTrailingComma" />
+    <module name="ArrayTrailingComma">
+      <!-- Control whether to always check for a trailing comma, even when an array is inline. -->
+      <property name="alwaysDemandTrailingComma" value="${checkstyle.ArrayTrailingComma.alwaysDemandTrailingComma}"/>
+    </module>
 
     <module name="EmptyStatement" />
 

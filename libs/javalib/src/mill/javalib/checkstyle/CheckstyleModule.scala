@@ -1,10 +1,10 @@
 package mill.javalib.checkstyle
 
 import mill.*
-import mill.api.{PathRef}
+import mill.api.{BuildCtx, PathRef}
 import mill.javalib.{Dep, DepSyntax, JavaModule}
 import mill.util.Jvm
-import mill.api.BuildCtx
+import scala.util.Properties.isWin
 
 /**
  * Performs quality checks on Java source files using [[https://checkstyle.org/ Checkstyle]].
@@ -26,12 +26,25 @@ trait CheckstyleModule extends JavaModule {
 
   protected def checkstyle0(stdout: Boolean, leftover: mainargs.Leftover[String]) = Task.Anon {
 
+    val propsFile = checkstylePropertiesFile().path
+    val propsFileExists = os.exists(propsFile)
     val output = checkstyleOutput().path
     val args = checkstyleOptions() ++
-      Seq("-c", checkstyleConfig().path.toString()) ++
+      (if (checkstyleOptions().contains("-c") || !os.exists(checkstyleConfig().path)) Nil
+       else Seq("-c", checkstyleConfig().path.toString())) ++
       Seq("-f", checkstyleFormat()) ++
       (if (stdout) Seq.empty else Seq("-o", output.toString())) ++
-      (if (leftover.value.nonEmpty) leftover.value else sources().map(_.path.toString()))
+      (if (leftover.value.nonEmpty) leftover.value else sources().map(_.path.toString())) ++
+      (if (propsFileExists) Seq("-p", propsFile.toString) else Seq.empty)
+    val jvmArgs =
+      // CLI system properties are ignored when properties file exists
+      if (propsFileExists) Seq.empty
+      else {
+        // On Windows, CLI system properties should be wrapped with ".
+        val encode = if (isWin) (kv: (String, String)) => s"-D\"${kv._1}=${kv._2}\""
+        else (kv: (String, String)) => s"-D${kv._1}=${kv._2}"
+        checkstyleProperties().toSeq.map(encode)
+      }
 
     Task.log.info("running checkstyle ...")
     Task.log.debug(s"with $args")
@@ -44,7 +57,7 @@ trait CheckstyleModule extends JavaModule {
       stdin = os.Inherit,
       stdout = os.Inherit,
       check = false,
-      jvmArgs = checkstyleJvmArgs()
+      jvmArgs = jvmArgs
     ).exitCode
 
     (output, exitCode)
@@ -75,18 +88,6 @@ trait CheckstyleModule extends JavaModule {
     }
 
     exitCode
-  }
-
-  def checkstyleProperties: T[Map[String, String]] = Task {
-    Map.from(checkstyleLanguage().map("user.language" -> _))
-  }
-
-  def checkstyleJvmArgs: T[Seq[String]] = Task {
-    checkstyleProperties().toSeq.map((k, v) => s"-D$k=$v")
-  }
-
-  def checkstyleMvnDeps: T[Seq[Dep]] = Task {
-    Seq(mvn"com.puppycrawl.tools:checkstyle:${checkstyleVersion()}")
   }
 
   /**
@@ -139,4 +140,25 @@ trait CheckstyleModule extends JavaModule {
   def checkstyleVersion: T[String] = Task {
     "10.18.1"
   }
+
+  def checkstyleMvnDeps: T[Seq[Dep]] = Task {
+    Seq(mvn"com.puppycrawl.tools:checkstyle:${checkstyleVersion()}")
+  }
+
+  /**
+   * System properties for Checkstyle.
+   *
+   * @see [[https://checkstyle.sourceforge.io/config_system_properties.html]]
+   */
+  def checkstyleProperties: T[Map[String, String]] = Task {
+    checkstyleLanguage().map("user.language" -> _).toMap
+  }
+
+  /**
+   * File containing system properties for Checkstyle.
+   *
+   * @see [[https://checkstyle.sourceforge.io/cmdline.html#Using_a_Properties_File]]
+   */
+  def checkstylePropertiesFile: T[PathRef] =
+    Task.Source(BuildCtx.workspaceRoot / "checkstyle.properties")
 }
