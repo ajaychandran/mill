@@ -30,5 +30,20 @@ object BuildGenYamlTests extends TestSuite {
         )
       )
     }
+    test("pomSettingsWithDefaultsIsRendered") {
+      val workspace = os.temp.dir()
+      val rootModule = ModuleSpec(
+        name = "example",
+        pomSettings = Some(ModuleSpec.PomSettings())
+      )
+      BuildGenYaml.writeBuildFiles(
+        baseDir = workspace,
+        packages = Seq(PackageSpec(os.sub, rootModule))
+      )
+      val generated = os.read(workspace / "build.mill.yaml")
+      assert(
+        generated.contains("pomSettings: {}")
+      )
+    }
   }
 }

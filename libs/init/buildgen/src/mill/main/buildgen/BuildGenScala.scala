@@ -79,25 +79,7 @@ object BuildGenScala extends BuildGen {
     packages0 = if (merge) Seq(mergePackages(packages0.head, packages0.tail)) else packages0
     removeExistingBuildFiles()
 
-    if (depNames.nonEmpty) {
-      val file = os.sub / millBuild / "src/Deps.scala"
-      println(s"writing $file")
-      os.write(baseDir / file, renderDepsObject(depNames), createFolders = true)
-    }
-    val baseFile = for (module <- baseModule) yield {
-      val file = os.sub / millBuild / os.SubPath(s"src/${module.name}.scala")
-      println(s"writing $file")
-      os.write(
-        baseDir / file,
-        Seq(
-          "package millbuild",
-          renderImports(module),
-          renderBaseModule(module)
-        ).mkString(lineSep * 2),
-        createFolders = true
-      )
-      file
-    }
+    val metaBuildFiles = writeMetaBuildFiles(baseDir, baseModule, depNames)
     val rootPackage +: nestedPackages = packages0.runtimeChecked
     var buildHeader = Seq(
       s"//| mill-version: $resolveMillVersion",
@@ -112,19 +94,73 @@ object BuildGenScala extends BuildGen {
       buildHeader ++= metaMvnDeps.map("//|   - " + _)
     }
     println("writing build.mill")
+    val rootBuildFile = baseDir / "build.mill"
     os.write(
-      baseDir / "build.mill",
+      rootBuildFile,
       s"""${buildHeader.mkString(lineSep)}
          |${renderPackage(rootPackage)}
          |""".stripMargin
     )
-    val subFiles = for (pkg <- nestedPackages) yield {
-      val file = os.sub / pkg.dir / "package.mill"
-      println(s"writing $file")
-      os.write(baseDir / file, renderPackage(pkg))
+    val nestedBuildFiles = for (pkg <- nestedPackages) yield {
+      val sub = os.sub / pkg.dir / "package.mill"
+      println(s"writing $sub")
+      val file = baseDir / sub
+      os.write(file, renderPackage(pkg))
       file
     }
-    (baseFile.toSeq ++ subFiles).map(baseDir / _)
+    metaBuildFiles ++ (rootBuildFile +: nestedBuildFiles)
+  }
+
+  private[buildgen] def writeMetaBuildFiles(
+      baseDir: os.Path,
+      baseModule: Option[ModuleSpec] = None,
+      depNames: Seq[(MvnDep, String)] = Nil,
+      mvnDeps: Seq[String] = Nil
+  ): Seq[os.Path] = {
+    val rootFile = Option.when(mvnDeps.nonEmpty) {
+      val sub = os.sub / millBuild / "build.mill"
+      println(s"writing $sub")
+      val file = baseDir / sub
+      os.write(file, renderMetaBuildRoot(mvnDeps), createFolders = true)
+      file
+    }
+    val depsFile = Option.when(depNames.nonEmpty) {
+      val sub = os.sub / millBuild / "src/Deps.scala"
+      println(s"writing $sub")
+      val file = baseDir / sub
+      os.write(file, renderDepsObject(depNames), createFolders = true)
+      file
+    }
+    val baseFile = for (module <- baseModule) yield {
+      val sub = os.sub / millBuild / os.SubPath(s"src/${module.name}.scala")
+      println(s"writing $sub")
+      val file = baseDir / sub
+      os.write(
+        file,
+        Seq(
+          "package millbuild",
+          renderImports(module),
+          renderBaseModule(module)
+        ).mkString(lineSep * 2),
+        createFolders = true
+      )
+      file
+    }
+    Seq(rootFile ++ depsFile ++ baseFile).flatten
+  }
+
+  private def renderMetaBuildRoot(mvnDeps: Seq[String]) = {
+    val mvnDepsDef = mvnDeps.map { s =>
+      val s0 = s.replace("$MILL_VERSION", "${millVersion()}")
+      s"""mvn"$s0""""
+    }.mkString("def mvnDeps = Seq(", ", ", ")")
+    s"""package build
+       |import mill.*
+       |import mill.meta.MillBuildRootModule
+       |import mill.scalalib.*
+       |object `package` extends MillBuildRootModule {
+       |  $mvnDepsDef
+       |}""".stripMargin
   }
 
   private def renderDepsObject(depNames: Seq[(MvnDep, String)]) = {
@@ -201,6 +237,12 @@ object BuildGenScala extends BuildGen {
       encodeOpt
     )
     lines += renderDefValue("jmhCoreVersion", jmhCoreVersion, encodeString)
+    lines += renderDefValues("checkstyleProperties", checkstyleProperties, encodeProperty)
+    lines += renderDefValues("checkstyleMvnDeps", checkstyleMvnDeps, encodeMvnDep)
+    lines += renderDefValues("checkstyleOptions", checkstyleOptions, encodeString)
+    lines += renderDefValue("checkstyleVersion", checkstyleVersion, encodeString)
+    lines += renderDefValues("pmdOptions", pmdOptions, encodeString)
+    lines += renderDefValue("pmdVersion", pmdVersion, encodeString)
     lines += renderDefValue("scalafixConfig", scalafixConfig, encodeSome)
     lines += renderDefValues("scalafixIvyDeps", scalafixIvyDeps, encodeMvnDep)
     lines += renderDefValue("scoverageVersion", scoverageVersion, encodeString)

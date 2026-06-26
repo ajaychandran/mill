@@ -1,7 +1,9 @@
 package mill.main.maven
 
 import mill.main.buildgen.*
+import mill.main.buildgen.BuildInfo.millJacocoDep
 import mill.main.buildgen.ModuleSpec.*
+import org.apache.maven.model.building.ModelBuildingResult
 import org.apache.maven.model.{Developer as MvnDeveloper, License as MvnLicense, *}
 
 import scala.jdk.CollectionConverters.*
@@ -110,7 +112,11 @@ object MillMavenBuildGenMain {
             bomModuleDeps = bomModuleDeps,
             artifactName = Option(model.getArtifactId)
           )
-          mainModule = plugins.withErrorProneModule(mainModule).getOrElse(mainModule)
+          plugins.withErrorProneModule(mainModule).foreach(mainModule = _)
+          plugins.withCheckstyleModule(mainModule).foreach(mainModule = _)
+          plugins.withPmdModule(mainModule).foreach(mainModule = _)
+          plugins.withSpotlessModule(mainModule).foreach(mainModule = _)
+          plugins.withRevapiModule(mainModule).foreach(mainModule = _)
           if (isSpringParentProject) {
             mainModule = mainModule.withSpringBootModule(springBootVersion)
           }
@@ -137,6 +143,7 @@ object MillMavenBuildGenMain {
               testSandboxWorkingDir = Some(false),
               testFramework = Option.when(testMixin.isEmpty)("")
             )
+            plugins.withJacocoTestModule(testModule).foreach(testModule = _)
             if (isSpringParentProject) {
               testModule = testModule.withSpringBootTestsModule()
             }
@@ -173,8 +180,7 @@ object MillMavenBuildGenMain {
           supertypes = mainModule.supertypes :+ "PublishModule",
           pomPackagingType = Option(model.getPackaging).filter(_ != "jar"),
           pomParentProject = toPomParentProject(model.getParent),
-          // Use raw model since the effective one returns derived values for URL fields.
-          pomSettings = Some(toPomSettings(result.getRawModel)),
+          pomSettings = Some(toPomSettings(result)),
           publishVersion = Option(model.getVersion),
           publishProperties =
             if (publishProperties.value) model.getProperties.asScala.toSeq else Nil
@@ -188,12 +194,16 @@ object MillMavenBuildGenMain {
       if (noMeta.value) (None, packages)
       else buildGen.withBaseModule(packages, "MavenModule" -> "MavenTests")
         .fold((None, packages))((base, pkgs) => (Some(base), pkgs))
+    val metaMvnDeps = packages.flatMap(_.module.tree).flatMap(_.supertypes).distinct.collect {
+      case "JacocoTestModule" => millJacocoDep
+    }
     buildGen.writeBuildFiles(
       baseDir = millWorkspace,
       packages = packages0,
       merge = merge.value,
       baseModule = baseModule,
-      millJvmVersion = millJvmId
+      millJvmVersion = millJvmId,
+      metaMvnDeps = metaMvnDeps
     )
   }
 
@@ -244,11 +254,13 @@ object MillMavenBuildGenMain {
     }
   }
 
-  private def toPomSettings(model: Model) = {
+  private def toPomSettings(result: ModelBuildingResult) = {
+    // Use raw model since the effective one returns derived values for URL fields.
+    val model = result.getRawModel
     import model.*
     PomSettings(
       description = Option(getDescription).getOrElse(""),
-      organization = Option(getGroupId).getOrElse(""),
+      organization = Option(result.getEffectiveModel.getGroupId).getOrElse(""),
       url = Option(getUrl).getOrElse(""),
       licenses = getLicenses.asScala.map(toLicense).toSeq,
       versionControl = toVersionControl(getScm),

@@ -1,10 +1,12 @@
 package mill.javalib.checkstyle
 
 import mill.*
-import mill.api.{PathRef}
-import mill.javalib.{DepSyntax, JavaModule}
+import mill.api.PathRef
+import mill.javalib.{Dep, DepSyntax, JavaModule}
 import mill.util.Jvm
 import mill.api.BuildCtx
+
+import scala.util.Properties.isWin
 
 /**
  * Performs quality checks on Java source files using [[https://checkstyle.org/ Checkstyle]].
@@ -27,23 +29,41 @@ trait CheckstyleModule extends JavaModule {
   protected def checkstyle0(stdout: Boolean, leftover: mainargs.Leftover[String]) = Task.Anon {
 
     val output = checkstyleOutput().path
+    val checkstylePropertiesFileExists = os.exists(checkstylePropertiesFile().path)
     val args = checkstyleOptions() ++
-      Seq("-c", checkstyleConfig().path.toString()) ++
-      Seq("-f", checkstyleFormat()) ++
-      (if (stdout) Seq.empty else Seq("-o", output.toString())) ++
-      (if (leftover.value.nonEmpty) leftover.value else sources().map(_.path.toString()))
-    val jvmArgs = checkstyleLanguage()
-      .map(lang => s"-Duser.language=$lang")
-      .toSeq
+      (if (!checkstyleOptions().contains("-c") && os.exists(checkstyleConfig().path)) {
+         Seq("-c", checkstyleConfig().path.toString)
+       } else Nil) ++
+      (if (!checkstyleOptions().contains("-f")) {
+         Seq("-f", checkstyleFormat())
+       } else Nil) ++
+      (if (!checkstyleOptions().contains("-o") && !stdout) {
+         Seq("-o", output.toString())
+       } else Nil) ++
+      (if (!checkstyleOptions().contains("-p") && checkstylePropertiesFileExists)
+         Seq("-p", checkstylePropertiesFile().path.toString)
+       else Nil) ++
+      (if (leftover.value.nonEmpty) leftover.value else sources().map(PathRef.realAbs))
+    val jvmArgs =
+      // CLI system properties are ignored if properties file exists
+      if (checkstylePropertiesFileExists) Nil
+      else {
+        // On Windows, CLI system properties should be wrapped in double quotes.
+        val encodeProp = if (isWin) (kv: (String, String)) => s"-D\"${kv._1}=${kv._2}\""
+        else (kv: (String, String)) => s"-D${kv._1}=${kv._2}"
+        checkstyleProperties().toSeq.map(encodeProp)
+      }
 
     Task.log.info("running checkstyle ...")
     Task.log.debug(s"with $args")
+    Task.log.debug(s"with jvmArgs: $jvmArgs")
 
+    Task.log.info(s"pwd: ${os.pwd}")
     val exitCode = Jvm.callProcess(
       mainClass = "com.puppycrawl.tools.checkstyle.Main",
       classPath = checkstyleClasspath().map(_.path).toVector,
       mainArgs = args,
-      cwd = moduleDir, // allow passing relative paths for sources like src/a/b
+      cwd = moduleDir,
       stdin = os.Inherit,
       stdout = os.Inherit,
       check = false,
@@ -84,13 +104,13 @@ trait CheckstyleModule extends JavaModule {
    * Classpath for running Checkstyle.
    */
   def checkstyleClasspath: T[Seq[PathRef]] = Task {
-    defaultResolver().classpath(
-      Seq(mvn"com.puppycrawl.tools:checkstyle:${checkstyleVersion()}")
-    )
+    defaultResolver().classpath[Dep](checkstyleMvnDeps())
   }
 
   /**
    * Checkstyle configuration file. Defaults to `checkstyle-config.xml`.
+   * To specify a classpath  resource within [[checkstyleMvnDeps]] like `/google_checks.xml`, add
+   * the path to [[checkstyleOptions]] with the `-c` option.
    */
   def checkstyleConfig: T[PathRef] = Task.Source {
     BuildCtx.workspaceRoot / "checkstyle-config.xml"
@@ -132,4 +152,25 @@ trait CheckstyleModule extends JavaModule {
   def checkstyleVersion: T[String] = Task {
     "10.18.1"
   }
+
+  def checkstyleMvnDeps: T[Seq[Dep]] = Task {
+    Seq(mvn"com.puppycrawl.tools:checkstyle:${checkstyleVersion()}")
+  }
+
+  /**
+   * System properties for Checkstyle.
+   *
+   * @see [[https://checkstyle.sourceforge.io/config_system_properties.html]]
+   */
+  def checkstyleProperties: T[Map[String, String]] = Task {
+    checkstyleLanguage().map("user.language" -> _).toMap
+  }
+
+  /**
+   * File containing system properties for Checkstyle.
+   *
+   * @see [[https://checkstyle.sourceforge.io/cmdline.html#Using_a_Properties_File]]
+   */
+  def checkstylePropertiesFile: T[PathRef] =
+    Task.Source(BuildCtx.workspaceRoot / "checkstyle.properties")
 }
