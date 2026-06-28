@@ -1,5 +1,6 @@
 package mill.main.maven
 
+import mill.main.buildgen.ModuleSpec
 import mill.main.buildgen.ModuleSpec.*
 import org.apache.maven.model.{ConfigurationContainer, Model}
 import org.codehaus.plexus.util.xml.Xpp3Dom
@@ -50,6 +51,59 @@ class Plugins(model: Model) {
     }.getOrElse(epArgs)
     option <- options
   } yield option).distinct
+
+  def withCheckstyleModule(module: ModuleSpec): Option[ModuleSpec] = for {
+    plugin0 <- plugin("maven-checkstyle-plugin")
+    dom <- plugin0.getExecutions.asScala.find(_.getGoals.contains("check")).flatMap(config)
+    propertyExpansion = value(dom, "propertyExpansion")
+    checkstyleProperties = propertyExpansion.fold(Nil) { v =>
+      v.split("\\s+").toSeq.collect {
+        case s"$k=$v" => (k, v)
+      }
+    }
+    checkstyleMvnDeps = plugin0.getDependencies.asScala.toSeq.map(toMvnDep)
+    checkstyleOptions =
+      // https://maven.apache.org/plugins/maven-checkstyle-plugin/checkstyle-mojo.html#configLocation
+      // Potential values are or a classpath resource or a URL or a filesystem path.
+      value(dom, "configLocation").toSeq
+        // Replace presets with path to classpath resource
+        .map {
+          case "sun_checks.xml" => "/sun_checks.xml"
+          case "google_checks.xml" => "/google_checks.xml"
+          case path => path
+        }
+        .flatMap(Seq("-c", _))
+  } yield module.withCheckstyleModule.copy(
+    checkstyleProperties = Values(checkstyleProperties, appendSuper = true),
+    checkstyleMvnDeps = checkstyleMvnDeps,
+    checkstyleOptions = checkstyleOptions
+  )
+
+  def withPmdModule(module: ModuleSpec): Option[ModuleSpec] = for {
+    plugin0 <- plugin("maven-pmd-plugin")
+    dom <- config(plugin0)
+    // https://docs.pmd-code.org/latest/pmd_userdocs_cli_reference.html
+    // Path to a ruleset xml file. The path may reference a resource on the classpath of the application, be a local file system path, or a URL.
+    pmdRulesets = child(dom, "rulesets").toSeq.flatMap(values(_, "ruleset"))
+    pmdVersion = plugin0.getDependencies.asScala.collectFirst {
+      case dep if dep.getGroupId == "net.sourceforge.pmd" => dep.getVersion
+    }
+  } yield module.withPmdModule.copy(
+    pmdOptions = if (pmdRulesets.isEmpty) Nil else Seq("-R", pmdRulesets.mkString(",")),
+    pmdVersion = pmdVersion
+  )
+
+  def withSpotlessModule(module: ModuleSpec): Option[ModuleSpec] = for {
+    _ <- plugin("spotless-maven-plugin", "com.diffplug.spotless")
+  } yield module.withSpotlessModule
+
+  def withRevapiModule(module: ModuleSpec): Option[ModuleSpec] = for {
+    _ <- plugin("revapi-maven-plugin", "org.revapi")
+  } yield module.withRevapiModule
+
+  def withJacocoTestModule(module: ModuleSpec): Option[ModuleSpec] = for {
+    _ <- plugin("jacoco-maven-plugin", "org.jacoco")
+  } yield module.withJacocoTestModule
 
   def skipDeploy: Boolean = plugin("maven-deploy-plugin").flatMap(config)
     .flatMap(value(_, "skip")).fold(false)(_.toBoolean)
