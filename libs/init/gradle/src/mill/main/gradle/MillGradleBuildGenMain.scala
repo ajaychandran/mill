@@ -101,6 +101,7 @@ object MillGradleBuildGenMain {
             upickle.default.read[Seq[PackageSpec]](model.asJson)
         }
       finally gradleConnector.disconnect()
+    pprint.pprintln(packages, height = 999999)
     packages = normalizeBuild(packages)
 
     val (baseModule, packages0) =

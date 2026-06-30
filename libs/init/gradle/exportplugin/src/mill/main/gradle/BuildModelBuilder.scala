@@ -11,6 +11,7 @@ import org.gradle.api.attributes.Category
 import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependencyConstraint
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.plugins.quality.{CheckstyleExtension, PmdExtension}
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.*
 import org.gradle.api.publish.maven.internal.publication.DefaultMavenPom
@@ -111,6 +112,47 @@ class BuildModelBuilder(ctx: GradleBuildCtx, objectFactory: ObjectFactory, works
           errorProneOptions = mainJavaCompile.fold(Nil)(errorProneOptions)
         )
       }
+      // https://docs.gradle.org/current/dsl/org.gradle.api.plugins.quality.CheckstyleExtension.html
+      for (ext <- Option(getExtensions.findByType(classOf[CheckstyleExtension]))) {
+        // https: //docs.gradle.org/current/userguide/checkstyle_plugin.html#sec:checkstyle_built_in_variables
+        val builtinProperties = Option(ext.getConfigDirectory.getOrNull())
+          .map(_.getAsFile)
+          .filter(_.exists())
+          .fold(Nil)(dir => Seq(("config_loc", dir.toString)))
+        val configProperties = ext.getConfigProperties.asScala.toSeq.map((k, v) => (k, v.toString))
+        val checkstyleConfig =
+          Option(ext.getConfig).flatMap(res => Option(res.asFile())).map(_.getAbsolutePath)
+        mainModule = mainModule.withCheckstyleModule.copy(
+          checkstyleConfig = checkstyleConfig,
+          checkstyleProperties = Values(builtinProperties ++ configProperties, appendSuper = true),
+          checkstyleMvnDeps = Values(mvnDeps("checkstyle"), appendSuper = true),
+          checkstyleVersion = Option(ext.getToolVersion)
+        )
+      }
+      for {
+        ext <- Option(getExtensions.findByType(classOf[PmdExtension]))
+        // https://docs.gradle.org/current/dsl/org.gradle.api.plugins.quality.PmdExtension.html#org.gradle.api.plugins.quality.PmdExtension:ruleSets
+        classpathRulesets = ext.getRuleSets.asScala.toSeq
+        fileRulesets = ext.getRuleSetFiles.asScala.toSeq.map(_.toString)
+        allRulesets = classpathRulesets ++ fileRulesets
+        // Cannot map to pmdRulesets in all cases
+        pmdOptions = if (allRulesets.isEmpty) Nil else Seq("-R", allRulesets.mkString(","))
+      } {
+        mainModule = mainModule.withPmdModule.copy(
+          pmdOptions = pmdOptions,
+          pmdVersion = Option(ext.getToolVersion)
+        )
+      }
+      if (getPluginManager.hasPlugin("com.palantir.java-format")) {
+        mainModule = mainModule.withPalantirFormatModule
+      }
+      if (getPluginManager.hasPlugin("com.diffplug.spotless")) {
+        mainModule = mainModule.withSpotlessModule
+      }
+      if (getPluginManager.hasPlugin("org.revapi.revapi-gradle-plugin")) {
+        mainModule = mainModule.withRevapiModule
+      }
+
       if (isSpringBoot) {
         val pluginVersion = detectPluginVersion(project0, SpringBootPluginId)
         mainModule = mainModule.withSpringBootModule(pluginVersion)

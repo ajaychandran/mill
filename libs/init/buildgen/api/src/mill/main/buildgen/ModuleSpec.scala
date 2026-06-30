@@ -41,6 +41,13 @@ case class ModuleSpec(
     errorProneOptions: Values[String] = Values(),
     errorProneJavacEnableOptions: Values[Opt] = Values(),
     jmhCoreVersion: Value[String] = Value(),
+    checkstyleConfig: Value[String] = Value(),
+    checkstyleProperties: Values[(String, String)] = Values(),
+    checkstyleMvnDeps: Values[MvnDep] = Values(),
+    checkstyleOptions: Values[String] = Values(),
+    checkstyleVersion: Value[String] = Value(),
+    pmdOptions: Values[String] = Values(),
+    pmdVersion: Value[String] = Value(),
     scalaVersion: Value[String] = Value(),
     scalacOptions: Values[Opt] = Values(),
     scalacPluginMvnDeps: Values[MvnDep] = Values(),
@@ -130,6 +137,31 @@ case class ModuleSpec(
       case _ => this
     }
   }
+
+  def withCheckstyleModule: ModuleSpec = copy(
+    imports = "mill.javalib.checkstyle.CheckstyleModule" +: imports,
+    supertypes = supertypes :+ "CheckstyleModule"
+  )
+
+  def withPmdModule: ModuleSpec = copy(
+    imports = "mill.javalib.pmd.PmdModule" +: imports,
+    supertypes = supertypes :+ "PmdModule"
+  )
+
+  def withPalantirFormatModule: ModuleSpec = copy(
+    imports = "mill.javalib.palantirformat.PalantirFormatModule" +: imports,
+    supertypes = supertypes :+ "PalantirFormatModule"
+  )
+
+  def withSpotlessModule: ModuleSpec = copy(
+    imports = "mill.javalib.spotless.SpotlessModule" +: imports,
+    supertypes = supertypes :+ "SpotlessModule"
+  )
+
+  def withRevapiModule: ModuleSpec = copy(
+    imports = "mill.javalib.revapi.RevapiModule" +: imports,
+    supertypes = supertypes :+ "RevapiModule"
+  )
 }
 object ModuleSpec {
   sealed trait CrossVersion {

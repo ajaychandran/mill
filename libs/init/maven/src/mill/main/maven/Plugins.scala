@@ -1,5 +1,6 @@
 package mill.main.maven
 
+import mill.main.buildgen.ModuleSpec
 import mill.main.buildgen.ModuleSpec.*
 import org.apache.maven.model.{ConfigurationContainer, Model}
 import org.codehaus.plexus.util.xml.Xpp3Dom
@@ -51,6 +52,56 @@ class Plugins(model: Model) {
     option <- options
   } yield option).distinct
 
+  def withCheckstyleModule(module: ModuleSpec): Option[ModuleSpec] = for {
+    plugin0 <- plugin("maven-checkstyle-plugin")
+    dom <- plugin0.getExecutions.asScala.find(_.getGoals.contains("check")).flatMap(config)
+    // https://maven.apache.org/plugins/maven-checkstyle-plugin/examples/custom-property-expansion.html
+    propertyExpansion = value(dom, "propertyExpansion")
+    checkstyleProperties = propertyExpansion.fold(Nil) { v =>
+      v.split("\\s+").toSeq.collect {
+        case s"$k=$v" => (k, v)
+      }
+    }
+    checkstyleMvnDeps = plugin0.getDependencies.asScala.toSeq.map(toMvnDep)
+    // https://maven.apache.org/plugins/maven-checkstyle-plugin/checkstyle-mojo.html
+    checkstyleOptions =
+      // Potential values are a filesystem path, a URL, or a classpath resource.
+      // Cannot map to checkstyleConfig for all cases.
+      value(dom, "configLocation").toSeq
+        // Replace presets with path to classpath resource.
+        .map {
+          case "sun_checks.xml" => "/sun_checks.xml"
+          case "google_checks.xml" => "/google_checks.xml"
+          case path => path
+        }
+        .flatMap(Seq("-c", _)) ++
+        // This parameter is resolved as URL, File then resource.
+        // Cannot map to checkstylePropertiesFile for all cases.
+        value(dom, "propertiesLocation").toSeq
+          .flatMap(Seq("-p", _))
+  } yield module.withCheckstyleModule.copy(
+    checkstyleProperties = Values(checkstyleProperties, appendSuper = true),
+    checkstyleMvnDeps = checkstyleMvnDeps,
+    checkstyleOptions = checkstyleOptions
+  )
+
+  def withPmdModule(module: ModuleSpec): Option[ModuleSpec] = for {
+    plugin0 <- plugin("maven-pmd-plugin")
+    dom <- config(plugin0)
+    // https://docs.pmd-code.org/latest/pmd_userdocs_cli_reference.html
+    pmdOptions =
+      // The path may reference a resource on the classpath of the application, be a local file system path, or a URL.
+      // Cannot map to pmdRulesets for all cases.
+      child(dom, "rulesets").map(values(_, "ruleset")).toSeq
+        .flatMap(rulesets => Seq("-R", rulesets.mkString(",")))
+    pmdVersion = plugin0.getDependencies.asScala.collectFirst {
+      case dep if dep.getGroupId == "net.sourceforge.pmd" => dep.getVersion
+    }
+  } yield module.withPmdModule.copy(
+    pmdOptions = pmdOptions,
+    pmdVersion = pmdVersion
+  )
+
   def skipDeploy: Boolean = plugin("maven-deploy-plugin").flatMap(config)
     .flatMap(value(_, "skip")).fold(false)(_.toBoolean)
 
@@ -62,6 +113,11 @@ class Plugins(model: Model) {
         Opt(s"-D$key=$value")
       }
     }
+  
+  def exists(artifactId: String, groupId: String = "org.apache.maven.plugins") =
+    model.getBuild.getPlugins.asScala.exists(p =>
+      p.getArtifactId == artifactId && p.getGroupId == groupId
+    )
 
   private def plugin(artifactId: String, groupId: String = "org.apache.maven.plugins") =
     model.getBuild.getPlugins.asScala.find(p =>

@@ -2,6 +2,7 @@ package mill.main.maven
 
 import mill.main.buildgen.*
 import mill.main.buildgen.ModuleSpec.*
+import org.apache.maven.model.building.ModelBuildingResult
 import org.apache.maven.model.{Developer as MvnDeveloper, License as MvnLicense, *}
 
 import scala.jdk.CollectionConverters.*
@@ -124,6 +125,14 @@ object MillMavenBuildGenMain {
               errorProneOptions = plugins.errorProneOptions
             )
           }
+          plugins.withCheckstyleModule(mainModule).foreach(mainModule = _)
+          plugins.withPmdModule(mainModule).foreach(mainModule = _)
+          if (plugins.exists("spotless-maven-plugin", "com.diffplug.spotless")) {
+            mainModule = mainModule.withSpotlessModule
+          }
+          if (plugins.exists("revapi-maven-plugin", "org.revapi")) {
+            mainModule = mainModule.withRevapiModule
+          }
           if (isSpringParentProject) {
             mainModule = mainModule.withSpringBootModule(springBootVersion)
           }
@@ -190,7 +199,7 @@ object MillMavenBuildGenMain {
           pomPackagingType = Option(model.getPackaging).filter(_ != "jar"),
           pomParentProject = toPomParentProject(model.getParent),
           // Use raw model since the effective one returns derived values for URL fields.
-          pomSettings = Some(toPomSettings(result.getRawModel)),
+          pomSettings = Some(toPomSettings(result)),
           publishVersion = Option(model.getVersion),
           publishProperties =
             if (publishProperties.value) model.getProperties.asScala.toSeq else Nil
@@ -295,11 +304,14 @@ object MillMavenBuildGenMain {
     }
   }
 
-  private def toPomSettings(model: Model) = {
+  private def toPomSettings(result: ModelBuildingResult) = {
+    // https://maven.apache.org/ref/3.9.16/maven-model-builder/index.html#inheritance-assembly
+    // Use raw model since the effective one returns derived values for URL fields.
+    val model = result.getRawModel
     import model.*
     PomSettings(
       description = Option(getDescription).getOrElse(""),
-      organization = Option(getGroupId).getOrElse(""),
+      organization = Option(result.getEffectiveModel.getGroupId).getOrElse(""),
       url = Option(getUrl).getOrElse(""),
       licenses = getLicenses.asScala.map(toLicense).toSeq,
       versionControl = toVersionControl(getScm),
